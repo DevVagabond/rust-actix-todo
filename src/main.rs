@@ -6,7 +6,6 @@ use serde_json::json;
 use uuid::Uuid;
 
 use diesel::prelude::*;
-use rust_actixv1::db::interface::{self, get_interface};
 use rust_actixv1::establish_connection;
 use rust_actixv1::{
     models::{self as actix_models, NewTask, Task},
