@@ -6,6 +6,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use diesel::prelude::*;
+use rust_actixv1::db::interface::{self, get_interface};
 use rust_actixv1::establish_connection;
 use rust_actixv1::{
     models::{self as actix_models, NewTask, Task},
@@ -35,7 +36,7 @@ impl TaskObj {
 }
 
 #[get("/api/list-task")]
-async fn list_tasks(app: web::Data<Arc<Mutex<AppState>>>) -> impl Responder {
+async fn list_tasks(_app: web::Data<Arc<Mutex<AppState>>>) -> impl Responder {
     use rust_actixv1::schema::tasks::dsl::*;
 
     let connection = &mut establish_connection();
@@ -54,7 +55,7 @@ async fn list_tasks(app: web::Data<Arc<Mutex<AppState>>>) -> impl Responder {
 
 #[post("/api/add-task")]
 async fn add_task(
-    app: web::Data<Arc<Mutex<AppState>>>,
+    _app: web::Data<Arc<Mutex<AppState>>>,
     task: web::Json<TaskObj>,
 ) -> impl Responder {
     let task_obj = NewTask {
@@ -78,29 +79,28 @@ async fn add_task(
 
 #[put("/api/update/{id}")]
 async fn update_task(
-    app: web::Data<Arc<Mutex<AppState>>>,
+    _app: web::Data<Arc<Mutex<AppState>>>,
     task: web::Json<TaskObj>,
-    path: web::Path<Uuid>,
+    path: web::Path<i32>,
 ) -> impl Responder {
-    let mut app = app.lock().unwrap();
     let task_id = path.into_inner();
-    let mut found = false;
-    for task_obj in &mut app.task_array {
-        if task_obj.id == Some(task_id) {
-            found = true;
-            task_obj.title = task.title.clone();
-            task_obj.is_completed = task.is_completed;
-        }
-    }
+    use rust_actixv1::schema::tasks::dsl::{is_completed, tasks, title};
+    let connection = &mut establish_connection();
 
-    if found {
-        HttpResponse::Ok().json(json!({
-            "message" : "Task id updated"
-        }))
-    } else {
-        HttpResponse::NotFound().json(json!({
+    match diesel::update(tasks.find(task_id))
+        .set((
+            title.eq(&task.title),
+            is_completed.eq(task.is_completed.unwrap_or(false)),
+        ))
+        .get_result::<Task>(connection)
+    {
+        Ok(task) => HttpResponse::Ok().json(json!({
+            "message" : "Task updated",
+            "task": task
+        })),
+        Err(_) => HttpResponse::NotFound().json(json!({
             "error" : "Task with this id not found"
-        }))
+        })),
     }
 }
 
